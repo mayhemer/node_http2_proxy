@@ -27,10 +27,11 @@ function handle_non_connect(stream, headers) {
     port: uri.port || 80,
     path: headers[':path'],
     method: headers[':method'],
-    headers: { 'Accept': headers['accept'] },
+    headers: _.pick(headers, [
+      'cache-control',
+      'accept'
+    ]),
   };
-  const cc = headers['cache-control'];
-  if (cc) options.headers['Cache-control'] = cc;
 
   console.log('REQUEST', url, options);
   const request = http.request(options, response => {
@@ -52,13 +53,27 @@ function handle_non_connect(stream, headers) {
       stream.close();
     }
   });
+  request.on('error', (error) => {
+    console.error('request error', url, error);
+  });
 
   stream.pipe(request);
 }
 
+
 function handle_connect(stream, headers) {
   const auth_value = headers[':authority'];
   console.log('CONNECT\'ing to', auth_value);
+
+  // Just for testing how the client behaves when authentication is required
+  const REQUIRE_AUTHENTICATION = false;
+
+  if (REQUIRE_AUTHENTICATION && !('proxy-authorization' in headers)) {
+    console.log('forcing blind authentication');
+    stream.respond({ ':status': 407, 'proxy-authenticate': 'basic realm="You cannot pass!"' });
+    stream.end();
+    return;
+  }
 
   const auth = new URL(`tcp://${auth_value}`);
   const socket = net.connect(auth.port, auth.hostname, () => {
@@ -92,7 +107,7 @@ function handle_connect(stream, headers) {
   });
 }
 
-proxy.on('stream', (stream, headers) => {  
+proxy.on('stream', (stream, headers) => {
   if (headers[':method'] !== 'CONNECT') {
     handle_non_connect(stream, headers)
   } else {
