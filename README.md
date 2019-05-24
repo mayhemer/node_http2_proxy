@@ -4,7 +4,7 @@
 
 Runs hard coded on `0.0.0.0:3000`.
 
-Understands `CONNECT` to create tunnels and forwards any other type of request (GET/POST.)  POST is broken.
+Understands `CONNECT` to create tunnels and forwards any other type of request (GET/POST.)
 
 Allows 'blind' (a.k.a any password will do) authentication for testing how clients handle 407 responses.
 

@@ -28,8 +28,13 @@ function handle_non_connect(stream, headers) {
     path: headers[':path'],
     method: headers[':method'],
     headers: _.pick(headers, [
+      'accept',
+      'accept-encoding',
+      'accept-language',
       'cache-control',
-      'accept'
+      'content-length',
+      'content-type',
+      'upgrade-insecure-requests',
     ]),
   };
 
@@ -53,6 +58,7 @@ function handle_non_connect(stream, headers) {
       stream.close();
     }
   });
+  
   request.on('error', (error) => {
     console.error('request error', url, error);
   });
