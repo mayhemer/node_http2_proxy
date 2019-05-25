@@ -95,7 +95,9 @@ function handle_connect(stream, headers) {
   }
 
   const auth = new URL(`tcp://${auth_value}`);
-  const socket = net.connect(auth.port, auth.hostname, () => {
+  // Strip IPv6 brackets, because Node is trying to resolve '[::]' as a name and fails to.
+  const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
+  const socket = net.connect(auth.port, hostname, () => {
     try {
       console.log('CONNECT\'ed to ', auth_value);
       stream.respond({ ':status': 200 });
