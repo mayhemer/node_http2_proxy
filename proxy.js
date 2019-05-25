@@ -13,9 +13,9 @@ const options = {
 const proxy = http2.createSecureServer(options);
 
 let session_count = 0;
-proxy.on('session', (session) => {
+proxy.on('session', () => {
   ++session_count;
-  console.log(`\nsession #${session_count}\n`);
+  console.log(`\nSESSION #${session_count}`);
 });
 
 function handle_non_connect(stream, headers) {
@@ -39,7 +39,11 @@ function handle_non_connect(stream, headers) {
   };
 
   console.log('REQUEST', url, options);
-  const request = http.request(options, response => {
+
+  const request = http.request(options);
+  stream.pipe(request);
+
+  request.on('response', response => {
     const headers = _.omit(response.headers, ['connection']);
     headers[':status'] = response.statusCode;
     console.log('RESPONSE BEGIN', url, headers);
@@ -59,11 +63,20 @@ function handle_non_connect(stream, headers) {
     }
   });
   
-  request.on('error', (error) => {
-    console.error('request error', url, error);
+  request.on('error', error => {
+    console.error('REQUEST ERROR', url, error);
+    try {
+      stream.respond({
+        ':status': 502, 'content-type': 'application/proxy-explanation+json'
+      });
+      stream.end(JSON.stringify({
+        title: 'reuquest error',
+        description: error.toString(),
+      }));
+    } catch (exception) {
+      stream.close();
+    }
   });
-
-  stream.pipe(request);
 }
 
 
