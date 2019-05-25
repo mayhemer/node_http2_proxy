@@ -70,7 +70,7 @@ function handle_non_connect(stream, headers) {
         ':status': 502, 'content-type': 'application/proxy-explanation+json'
       });
       stream.end(JSON.stringify({
-        title: 'reuquest error',
+        title: 'request error',
         description: error.toString(),
       }));
     } catch (exception) {
