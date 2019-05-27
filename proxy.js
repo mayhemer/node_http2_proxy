@@ -110,8 +110,11 @@ function handle_connect(stream, headers) {
 
   socket.on('error', (error) => {
     console.log('socket error', error, auth_value);
+    const { errno } = error;
+    const status = (errno == 'ENOTFOUND') ? 404 : 502;
+    console.log(`responsing with http_code='${status}'`);
     try {
-      stream.respond({ ':status': 502 });
+      stream.respond({ ':status': status });
       stream.end();
     } catch (exception) {
       stream.close(http2.constants.NGHTTP2_STREAM_CLOSED);
