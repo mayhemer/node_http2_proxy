@@ -110,8 +110,7 @@ function handle_connect(stream, headers) {
 
   socket.on('error', (error) => {
     console.log('socket error', error, auth_value);
-    const { errno } = error;
-    const status = (errno == 'ENOTFOUND') ? 404 : 502;
+    const status = (error.errno == 'ENOTFOUND') ? 404 : 502;
     console.log(`responsing with http_code='${status}'`);
     try {
       stream.respond({ ':status': status });
