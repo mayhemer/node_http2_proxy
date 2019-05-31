@@ -79,7 +79,7 @@ function handle_non_connect(stream, headers) {
   });
 }
 
-
+let active_tunnels_count = 0;
 function handle_connect(stream, headers) {
   const auth_value = headers[':authority'];
   console.log('CONNECT\'ing to', auth_value);
@@ -103,6 +103,8 @@ function handle_connect(stream, headers) {
       stream.respond({ ':status': 200 });
       socket.pipe(stream);
       stream.pipe(socket);
+
+      console.log('tunnels:', ++active_tunnels_count);
     } catch (exception) {
       console.error(exception);
     }
@@ -121,12 +123,22 @@ function handle_connect(stream, headers) {
   });
   socket.on('close', () => {
     console.log('socket close', auth_value);
+    console.log('tunnels:', --active_tunnels_count);
   });
   socket.on('end', () => {
     console.log('socket end', auth_value);
   });
   socket.on('ready', () => {
     console.log('socket ready', auth_value);
+  });
+
+  stream.on('close', () => {
+    console.log('tunnel stream closed', auth_value);
+    socket.end();
+  });
+  stream.on('aborted', () => {
+    console.log('tunnel stream aborted', auth_value);
+    socket.end();
   });
 }
 
