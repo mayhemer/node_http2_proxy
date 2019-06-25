@@ -6,6 +6,8 @@ const net = require('net');
 const progress = require('progress-stream');
 const _ = require('lodash');
 
+require('console-stamp')(console, { pattern: 'HH:MM:ss.l' });
+
 const options = {
   key: fs.readFileSync('http2-cert.key'),
   cert: fs.readFileSync('http2-cert.pem'),
@@ -16,7 +18,7 @@ const proxy = http2.createSecureServer(options);
 let session_count = 0;
 proxy.on('session', () => {
   ++session_count;
-  console.log(`\nSESSION #${session_count}`);
+  console.log(`*** SESSION #${session_count}`);
 });
 
 function handle_non_connect(stream, headers) {
@@ -111,7 +113,7 @@ function handle_connect(stream, headers) {
       prog_stream.on('progress', progress => {
         console.log(`sent ${progress.delta} -> ${auth_value}`);
       });
-      
+
       socket.pipe(prog_socket).pipe(stream);
       stream.pipe(prog_stream).pipe(socket);
 
