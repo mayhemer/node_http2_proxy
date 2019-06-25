@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "http2": "^3.3.7",
-    "lodash": "^4.17.11"
+    "lodash": "^4.17.11",
+    "progress-stream": "^2.0.0"
   }
 }

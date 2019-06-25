@@ -3,6 +3,7 @@ const http2 = require('http2');
 const fs = require('fs');
 const { URL } = require('url');
 const net = require('net');
+const progress = require('progress-stream');
 const _ = require('lodash');
 
 const options = {
@@ -101,8 +102,18 @@ function handle_connect(stream, headers) {
     try {
       console.log('CONNECT\'ed to ', auth_value);
       stream.respond({ ':status': 200 });
-      socket.pipe(stream);
-      stream.pipe(socket);
+
+      const prog_socket = progress({});
+      const prog_stream = progress({});
+      prog_socket.on('progress', progress => {
+        console.log(`recv ${progress.delta} <- ${auth_value}`);
+      });
+      prog_stream.on('progress', progress => {
+        console.log(`sent ${progress.delta} -> ${auth_value}`);
+      });
+      
+      socket.pipe(prog_socket).pipe(stream);
+      stream.pipe(prog_stream).pipe(socket);
 
       console.log('tunnels:', ++active_tunnels_count);
     } catch (exception) {
