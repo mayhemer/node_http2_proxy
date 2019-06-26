@@ -1,0 +1,5 @@
+{
+  "authenticate": false,
+  "timestamp": true,
+  "tunnel_bytes": false
+}

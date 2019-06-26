@@ -6,7 +6,15 @@ const net = require('net');
 const progress = require('progress-stream');
 const _ = require('lodash');
 
-require('console-stamp')(console, { pattern: 'HH:MM:ss.l' });
+let config = Object.assign({
+  authenticate: false,
+  timestamp: false,
+  tunnel_bytes: false,
+}, JSON.parse(fs.readFileSync('proxy-config.json')));
+
+if (config.timestamp) {
+  require('console-stamp')(console, { pattern: 'HH:MM:ss.l' });
+}
 
 const options = {
   key: fs.readFileSync('http2-cert.key'),
@@ -88,9 +96,7 @@ function handle_connect(stream, headers) {
   console.log('CONNECT\'ing to', auth_value);
 
   // Just for testing how the client behaves when authentication is required
-  const REQUIRE_AUTHENTICATION = false;
-
-  if (REQUIRE_AUTHENTICATION && !('proxy-authorization' in headers)) {
+  if (config.authenticate && !('proxy-authorization' in headers)) {
     console.log('forcing blind authentication');
     stream.respond({ ':status': 407, 'proxy-authenticate': 'basic realm="You cannot pass!"' });
     stream.end();
@@ -105,17 +111,22 @@ function handle_connect(stream, headers) {
       console.log('CONNECT\'ed to ', auth_value);
       stream.respond({ ':status': 200 });
 
-      const prog_socket = progress({});
-      const prog_stream = progress({});
-      prog_socket.on('progress', progress => {
-        console.log(`recv ${progress.delta} <- ${auth_value}`);
-      });
-      prog_stream.on('progress', progress => {
-        console.log(`sent ${progress.delta} -> ${auth_value}`);
-      });
+      if (config.tunnel_bytes) {
+        const prog_socket = progress({});
+        const prog_stream = progress({});
+        prog_socket.on('progress', progress => {
+          console.log(`recv ${progress.delta} <- ${auth_value}`);
+        });
+        prog_stream.on('progress', progress => {
+          console.log(`sent ${progress.delta} -> ${auth_value}`);
+        });
 
-      socket.pipe(prog_socket).pipe(stream);
-      stream.pipe(prog_stream).pipe(socket);
+        socket.pipe(prog_socket).pipe(stream);
+        stream.pipe(prog_stream).pipe(socket);
+      } else {
+        socket.pipe(stream);
+        stream.pipe(socket);
+      }
 
       console.log('tunnels:', ++active_tunnels_count);
     } catch (exception) {
