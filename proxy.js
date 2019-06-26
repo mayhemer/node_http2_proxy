@@ -103,6 +103,8 @@ function handle_connect(stream, headers) {
     return;
   }
 
+  console.log('tunnels:', ++active_tunnels_count);
+
   const auth = new URL(`tcp://${auth_value}`);
   // Strip IPv6 brackets, because Node is trying to resolve '[::]' as a name and fails to.
   const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
@@ -128,9 +130,9 @@ function handle_connect(stream, headers) {
         stream.pipe(socket);
       }
 
-      console.log('tunnels:', ++active_tunnels_count);
     } catch (exception) {
       console.error(exception);
+      socket.end();
     }
   });
 
@@ -147,7 +149,6 @@ function handle_connect(stream, headers) {
   });
   socket.on('close', () => {
     console.log('socket close', auth_value);
-    console.log('tunnels:', --active_tunnels_count);
   });
   socket.on('end', () => {
     console.log('socket end', auth_value);
@@ -158,6 +159,7 @@ function handle_connect(stream, headers) {
 
   stream.on('close', () => {
     console.log('tunnel stream closed', auth_value);
+    console.log('tunnels:', --active_tunnels_count);
     socket.end();
   });
   stream.on('aborted', () => {
