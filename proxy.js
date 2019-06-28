@@ -10,6 +10,7 @@ let config = Object.assign({
   authenticate: false,
   timestamp: false,
   tunnel_bytes: false,
+  response_bytes: false,
 }, JSON.parse(fs.readFileSync('proxy-config.json')));
 
 if (config.timestamp) {
@@ -55,7 +56,7 @@ function handle_non_connect(stream, headers) {
   stream.pipe(request);
 
   request.on('response', response => {
-    const headers = _.omit(response.headers, ['connection']);
+    const headers = _.omit(response.headers, ['connection', 'transfer-encoding']);
     headers[':status'] = response.statusCode;
     console.log('RESPONSE BEGIN', url, headers);
 
@@ -63,6 +64,9 @@ function handle_non_connect(stream, headers) {
       stream.respond(headers);
 
       response.on('data', data => {
+        if (config.response_bytes) {
+          console.log('RESPONSE DATA', data.length, url);
+        }
         stream.write(data);
       });
       response.on('end', () => {
@@ -70,6 +74,7 @@ function handle_non_connect(stream, headers) {
         stream.end();
       });
     } catch (exception) {
+      console.log('RESPONSE EXCEPTION', exception, url);
       stream.close();
     }
   });
@@ -149,6 +154,7 @@ function handle_connect(stream, headers) {
   });
   socket.on('close', () => {
     console.log('socket close', auth_value);
+    stream.end();
   });
   socket.on('end', () => {
     console.log('socket end', auth_value);
@@ -161,6 +167,9 @@ function handle_connect(stream, headers) {
     console.log('tunnel stream closed', auth_value);
     console.log('tunnels:', --active_tunnels_count);
     socket.end();
+  });
+  stream.on('error', error => { 
+    console.log('tunnel stream error', error, auth_value);
   });
   stream.on('aborted', () => {
     console.log('tunnel stream aborted', auth_value);
