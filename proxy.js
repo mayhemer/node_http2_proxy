@@ -25,13 +25,16 @@ const options = {
 const proxy = http2.createSecureServer(options);
 
 let session_count = 0;
+let session_id = 0;
 proxy.on('session', session => {
   ++session_count;
-  session.__id = session_count;
 
-  console.log(`NEW SESSION`, session.__id);
+  session.__id = ++session_id;
+  session.__tunnel_count = 0;
+
+  console.log(`*** NEW SESSION`, session.__id);
   session.on('close', () => {
-    console.log(`CLOSED SESSION`, session.__id);
+    console.log(`*** CLOSED SESSION`, session.__id);
     --session_count;
   });
 });
@@ -109,9 +112,9 @@ function handle_non_connect(stream, headers) {
   });
 }
 
-let active_tunnels_count = 0;
 function handle_connect(stream, headers) {
   const auth_value = headers[':authority'];
+  const session = stream.session;
   console.log('CONNECT\'ing to', auth_value);
 
   // Just for testing how the client behaves when authentication is required
@@ -122,7 +125,20 @@ function handle_connect(stream, headers) {
     return;
   }
 
-  console.log('tunnels:', ++active_tunnels_count);
+  console.log('tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+
+  stream.on('close', () => {
+    console.log('tunnel stream closed', auth_value);
+    console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+    socket.end();
+  });
+  stream.on('error', error => {
+    console.log('tunnel stream error', error, auth_value);
+  });
+  stream.on('aborted', () => {
+    console.log('tunnel stream aborted', auth_value);
+    socket.end();
+  });
 
   const auth = new URL(`tcp://${auth_value}`);
   // Strip IPv6 brackets, because Node is trying to resolve '[::]' as a name and fails to.
@@ -175,19 +191,6 @@ function handle_connect(stream, headers) {
   });
   socket.on('ready', () => {
     console.log('socket ready', auth_value);
-  });
-
-  stream.on('close', () => {
-    console.log('tunnel stream closed', auth_value);
-    console.log('tunnels:', --active_tunnels_count);
-    socket.end();
-  });
-  stream.on('error', error => { 
-    console.log('tunnel stream error', error, auth_value);
-  });
-  stream.on('aborted', () => {
-    console.log('tunnel stream aborted', auth_value);
-    socket.end();
   });
 }
 
