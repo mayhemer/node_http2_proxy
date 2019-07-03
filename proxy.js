@@ -43,6 +43,14 @@ proxy.on('session', session => {
   });
 });
 
+proxy.on('stream', (stream, headers) => {
+  if (headers[':method'] !== 'CONNECT') {
+    handle_non_connect(stream, headers)
+  } else {
+    handle_connect(stream, headers)
+  }
+});
+
 function handle_non_connect(stream, headers) {
   const uri = new URL(`${headers[':scheme']}://${headers[':authority']}${headers[':path']}`);
   const url = uri.toString();
@@ -163,10 +171,10 @@ function handle_connect(stream, headers) {
         const prog_socket = progress({});
         const prog_stream = progress({});
         prog_socket.on('progress', progress => {
-          console.log(`recv ${progress.delta} <- ${auth_value}`);
+          console.log(`recv ${progress.delta} <- ${auth_value}`, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
         });
         prog_stream.on('progress', progress => {
-          console.log(`sent ${progress.delta} -> ${auth_value}`);
+          console.log(`sent ${progress.delta} -> ${auth_value}`, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
         });
 
         socket.pipe(prog_socket).pipe(stream);
@@ -204,14 +212,6 @@ function handle_connect(stream, headers) {
     console.log('socket ready', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
   });
 }
-
-proxy.on('stream', (stream, headers) => {
-  if (headers[':method'] !== 'CONNECT') {
-    handle_non_connect(stream, headers)
-  } else {
-    handle_connect(stream, headers)
-  }
-});
 
 const listen = (server, port) => {
   return new Promise(resolve => {
