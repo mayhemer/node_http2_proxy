@@ -63,6 +63,16 @@ function handle_non_connect(stream, headers) {
   };
 
   console.log('REQUEST', url, options);
+  console.log('tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+
+  stream.on('close', () => {
+    console.log('REQUEST STREAM CLOSED', url);
+    console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+    socket.end();
+  });
+  stream.on('error', err => {
+    console.log('RESPONSE STREAM ERROR', err, url);
+  });
 
   const request = http.request(options);
   stream.pipe(request);
@@ -93,8 +103,7 @@ function handle_non_connect(stream, headers) {
       console.log('RESPONSE EXCEPTION', exception, url);
       stream.close();
     }
-  });
-  
+  });  
   request.on('error', error => {
     console.error('REQUEST ERROR', error, url);
     try {
@@ -108,10 +117,6 @@ function handle_non_connect(stream, headers) {
     } catch (exception) {
       stream.close();
     }
-  });
-
-  stream.on('error', err => {
-    console.log('RESPONSE ERROR on STREAM', err, url);
   });
 }
 
