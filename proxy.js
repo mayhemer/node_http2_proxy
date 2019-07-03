@@ -71,7 +71,7 @@ function handle_non_connect(stream, headers) {
     socket.end();
   });
   stream.on('error', err => {
-    console.log('RESPONSE STREAM ERROR', err, url);
+    console.log('RESPONSE STREAM ERROR', err, url, 'on session:', session.__id);
   });
 
   const request = http.request(options);
@@ -80,7 +80,7 @@ function handle_non_connect(stream, headers) {
   request.on('response', response => {
     const headers = _.omit(response.headers, ['connection', 'transfer-encoding']);
     headers[':status'] = response.statusCode;
-    console.log('RESPONSE BEGIN', url, headers);
+    console.log('RESPONSE BEGIN', url, headers, 'on session:', session.__id);
 
     try {
       stream.respond(headers);
@@ -92,20 +92,20 @@ function handle_non_connect(stream, headers) {
         stream.write(data);
       });
       response.on('error', err => {
-        console.log('RESPONSE ERROR', err, url);
+        console.log('RESPONSE ERROR', err, url, 'on session:', session.__id);
         stream.close(http2.constants.NGHTTP2_REFUSED_STREAM);
       });
       response.on('end', () => {
-        console.log('RESPONSE END', url);
+        console.log('RESPONSE END', url, 'on session:', session.__id);
         stream.end();
       });
     } catch (exception) {
-      console.log('RESPONSE EXCEPTION', exception, url);
+      console.log('RESPONSE EXCEPTION', exception, url, 'on session:', session.__id);
       stream.close();
     }
   });  
   request.on('error', error => {
-    console.error('REQUEST ERROR', error, url);
+    console.error('REQUEST ERROR', error, url, 'on session:', session.__id);
     try {
       stream.respond({
         ':status': 502, 'content-type': 'application/proxy-explanation+json'
@@ -123,7 +123,7 @@ function handle_non_connect(stream, headers) {
 function handle_connect(stream, headers) {
   const auth_value = headers[':authority'];
   const session = stream.session;
-  console.log('CONNECT\'ing to', auth_value);
+  console.log('CONNECT\'ing to', auth_value, 'stream.id', stream.id);
 
   // Just for testing how the client behaves when authentication is required
   if (config.authenticate && !('proxy-authorization' in headers)) {
@@ -133,18 +133,18 @@ function handle_connect(stream, headers) {
     return;
   }
 
-  console.log('tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+  console.log('  tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
 
   stream.on('close', () => {
-    console.log('tunnel stream closed', auth_value);
-    console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+    console.log('tunnel stream closed', auth_value, 'stream.id', stream.id);
+    console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
     socket.end();
   });
   stream.on('error', error => {
-    console.log('tunnel stream error', error, auth_value);
+    console.log('tunnel stream error', error, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
   });
   stream.on('aborted', () => {
-    console.log('tunnel stream aborted', auth_value);
+    console.log('tunnel stream aborted', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
     socket.end();
   });
 
@@ -180,7 +180,7 @@ function handle_connect(stream, headers) {
   });
 
   socket.on('error', (error) => {
-    console.log('socket error', error, auth_value);
+    console.log('socket error', error, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
     const status = (error.errno == 'ENOTFOUND') ? 404 : 502;
     console.log(`responsing with http_code='${status}'`);
     try {
@@ -191,14 +191,14 @@ function handle_connect(stream, headers) {
     }
   });
   socket.on('close', () => {
-    console.log('socket close', auth_value);
+    console.log('socket close', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
     stream.close();
   });
   socket.on('end', () => {
-    console.log('socket end', auth_value);
+    console.log('socket end', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
   });
   socket.on('ready', () => {
-    console.log('socket ready', auth_value);
+    console.log('socket ready', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
   });
 }
 
