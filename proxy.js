@@ -30,15 +30,15 @@ const proxy = http2.createSecureServer(options);
 let session_count = 0;
 let session_id = 0;
 proxy.on('session', session => {
-  ++session_count;
-
   session.__id = ++session_id;
   session.__tunnel_count = 0;
+  
+  ++session_count;
+  console.log(`*** NEW SESSION`, session.__id, '( sessions:', session_count, ')');
 
-  console.log(`*** NEW SESSION`, session.__id);
   session.on('close', () => {
-    console.log(`*** CLOSED SESSION`, session.__id);
     --session_count;
+    console.log(`*** CLOSED SESSION`, session.__id, '( sessions:', session_count, ')');
   });
 });
 
