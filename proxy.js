@@ -20,6 +20,7 @@ if (config.timestamp) {
 const options = {
   key: fs.readFileSync('http2-cert.key'),
   cert: fs.readFileSync('http2-cert.pem'),
+  peerMaxConcurrentStreams: config.peerMaxConcurrentStreams,
 };
 
 const proxy = http2.createSecureServer(options);
