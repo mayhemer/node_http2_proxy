@@ -5,6 +5,7 @@ const { URL } = require('url');
 const net = require('net');
 const progress = require('progress-stream');
 const _ = require('lodash');
+const { performance } = require('perf_hooks');
 
 let config = Object.assign({
   authenticate: false,
@@ -135,8 +136,10 @@ function handle_connect(stream, headers) {
 
   console.log('  tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
 
+  const open_time = performance.now();
+
   stream.on('close', () => {
-    console.log('tunnel stream closed', auth_value, 'stream.id', stream.id);
+    console.log('tunnel stream closed', auth_value, 'stream.id', stream.id, `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
     console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
     socket.end();
   });
