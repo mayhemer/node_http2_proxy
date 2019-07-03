@@ -51,7 +51,30 @@ proxy.on('stream', (stream, headers) => {
   }
 });
 
+function authenticated(stream, headers) {
+  if (!config.authenticate) {
+    return true;
+  }
+
+  if ('proxy-authorization' in headers) {
+    return true;
+  }
+
+  const response = {
+    ':status': 407,
+  }
+  if (typeof config.authenticate == "string") {
+    response['proxy-authenticate'] = config.authenticate;
+  }
+
+  console.log('  forcing blind authentication', response);
+  stream.respond(response);
+  stream.end();
+  return false;
+}
+
 function handle_non_connect(stream, headers) {
+  const session = stream.session;
   const uri = new URL(`${headers[':scheme']}://${headers[':authority']}${headers[':path']}`);
   const url = uri.toString();
   const options = {
@@ -72,12 +95,17 @@ function handle_non_connect(stream, headers) {
   };
 
   console.log('REQUEST', url, options);
+
+  // Just for testing how the client behaves when authentication is required
+  if (!authenticated(stream, headers)) {
+    return;
+  }
+
   console.log('tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
 
   stream.on('close', () => {
     console.log('REQUEST STREAM CLOSED', url);
     console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
-    socket.end();
   });
   stream.on('error', err => {
     console.log('RESPONSE STREAM ERROR', err, url, 'on session:', session.__id);
@@ -130,15 +158,12 @@ function handle_non_connect(stream, headers) {
 }
 
 function handle_connect(stream, headers) {
-  const auth_value = headers[':authority'];
   const session = stream.session;
+  const auth_value = headers[':authority'];
   console.log('CONNECT\'ing to', auth_value, 'stream.id', stream.id);
 
   // Just for testing how the client behaves when authentication is required
-  if (config.authenticate && !('proxy-authorization' in headers)) {
-    console.log('forcing blind authentication');
-    stream.respond({ ':status': 407, 'proxy-authenticate': 'basic realm="You cannot pass!"' });
-    stream.end();
+  if (!authenticated(stream, headers)) {
     return;
   }
 
