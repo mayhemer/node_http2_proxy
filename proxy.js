@@ -171,10 +171,10 @@ function handle_connect(stream, headers) {
         const prog_socket = progress({});
         const prog_stream = progress({});
         prog_socket.on('progress', progress => {
-          console.log(`recv ${progress.delta} <- ${auth_value}`, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+          console.log(`recv ${progress.delta} <- ${auth_value}`, 'stream.id', stream.id, 'on session:', session.__id);
         });
         prog_stream.on('progress', progress => {
-          console.log(`sent ${progress.delta} -> ${auth_value}`, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+          console.log(`sent ${progress.delta} -> ${auth_value}`, 'stream.id', stream.id, 'on session:', session.__id);
         });
 
         socket.pipe(prog_socket).pipe(stream);
