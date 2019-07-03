@@ -25,9 +25,15 @@ const options = {
 const proxy = http2.createSecureServer(options);
 
 let session_count = 0;
-proxy.on('session', () => {
+proxy.on('session', session => {
   ++session_count;
-  console.log(`*** SESSION #${session_count}`);
+  session.__id = session_count;
+
+  console.log(`NEW SESSION`, session.__id);
+  session.on('close', () => {
+    console.log(`CLOSED SESSION`, session.__id);
+    --session_count;
+  });
 });
 
 function handle_non_connect(stream, headers) {
@@ -69,6 +75,10 @@ function handle_non_connect(stream, headers) {
         }
         stream.write(data);
       });
+      response.on('error', err => {
+        console.log('RESPONSE ERROR', err, url);
+        stream.close(http2.constants.NGHTTP2_REFUSED_STREAM);
+      });
       response.on('end', () => {
         console.log('RESPONSE END', url);
         stream.end();
@@ -80,7 +90,7 @@ function handle_non_connect(stream, headers) {
   });
   
   request.on('error', error => {
-    console.error('REQUEST ERROR', url, error);
+    console.error('REQUEST ERROR', error, url);
     try {
       stream.respond({
         ':status': 502, 'content-type': 'application/proxy-explanation+json'
@@ -92,6 +102,10 @@ function handle_non_connect(stream, headers) {
     } catch (exception) {
       stream.close();
     }
+  });
+
+  stream.on('error', err => {
+    console.log('RESPONSE ERROR on STREAM', err, url);
   });
 }
 
@@ -154,7 +168,7 @@ function handle_connect(stream, headers) {
   });
   socket.on('close', () => {
     console.log('socket close', auth_value);
-    stream.end();
+    stream.close();
   });
   socket.on('end', () => {
     console.log('socket end', auth_value);
