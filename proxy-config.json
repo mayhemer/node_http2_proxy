@@ -3,5 +3,5 @@
   "timestamp": true,
   "tunnel_bytes": false,
   "response_bytes": false,
-  "peerMaxConcurrentStreams": 100
+  "maxConcurrentStreams": 100
 }
