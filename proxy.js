@@ -6,6 +6,7 @@ const net = require('net');
 const progress = require('progress-stream');
 const _ = require('lodash');
 const { performance } = require('perf_hooks');
+const converter = require('hex2dec');
 
 let config = Object.assign({
   authenticate: false,
@@ -166,7 +167,7 @@ function handle_non_connect(stream, headers) {
 function handle_connect(stream, headers) {
   const session = stream.session;
   const auth_value = headers[':authority'];
-  console.log('CONNECT\'ing to', auth_value, 'stream.id', stream.id);
+  console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()));
 
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(stream, headers)) {
@@ -178,15 +179,15 @@ function handle_connect(stream, headers) {
   const open_time = performance.now();
 
   stream.on('close', () => {
-    console.log('tunnel stream closed', auth_value, 'stream.id', stream.id, `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
+    console.log('tunnel stream closed', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
     console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
     socket.end();
   });
   stream.on('error', error => {
-    console.log('tunnel stream error', error, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('tunnel stream error', error, auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
   });
   stream.on('aborted', () => {
-    console.log('tunnel stream aborted', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('tunnel stream aborted', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
     socket.end();
   });
 
@@ -202,10 +203,10 @@ function handle_connect(stream, headers) {
         const prog_socket = progress({});
         const prog_stream = progress({});
         prog_socket.on('progress', progress => {
-          console.log(`recv ${progress.delta} <- ${auth_value}`, 'stream.id', stream.id, 'on session:', session.__id);
+          console.log(`recv ${progress.delta} <- ${auth_value}`, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
         });
         prog_stream.on('progress', progress => {
-          console.log(`sent ${progress.delta} -> ${auth_value}`, 'stream.id', stream.id, 'on session:', session.__id);
+          console.log(`sent ${progress.delta} -> ${auth_value}`, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
         });
 
         socket.pipe(prog_socket).pipe(stream);
@@ -222,7 +223,7 @@ function handle_connect(stream, headers) {
   });
 
   socket.on('error', (error) => {
-    console.log('socket error', error, auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('socket error', error, auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
     const status = (error.errno == 'ENOTFOUND') ? 404 : 502;
     console.log(`responsing with http_code='${status}'`);
     try {
@@ -233,14 +234,14 @@ function handle_connect(stream, headers) {
     }
   });
   socket.on('close', () => {
-    console.log('socket close', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('socket close', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
     stream.close();
   });
   socket.on('end', () => {
-    console.log('socket end', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('socket end', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
   });
   socket.on('ready', () => {
-    console.log('socket ready', auth_value, 'stream.id', stream.id, 'on session:', session.__id);
+    console.log('socket ready', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
   });
 }
 

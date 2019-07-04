@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "console-stamp": "^0.2.9",
+    "hex2dec": "^1.1.2",
     "http2": "^3.3.7",
     "lodash": "^4.17.11",
     "progress-stream": "^2.0.0"
