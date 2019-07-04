@@ -35,11 +35,17 @@ proxy.on('session', session => {
   session.__tunnel_count = 0;
   
   ++session_count;
+  if (session_count === 1) {
+    console.log(`\n\n>>> FIRST SESSION OPENING\n`);
+  }
   console.log(`*** NEW SESSION`, session.__id, '( sessions:', session_count, ')');
 
   session.on('close', () => {
     --session_count;
     console.log(`*** CLOSED SESSION`, session.__id, '( sessions:', session_count, ')');
+    if (!session_count) {
+      console.log(`\n\n<<< LAST SESSION CLOSED\n`);
+    }
   });
 });
 
