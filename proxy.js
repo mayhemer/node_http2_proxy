@@ -41,6 +41,9 @@ proxy.on('session', session => {
   }
   console.log(`*** NEW SESSION`, session.__id, '( sessions:', session_count, ')');
 
+  session.on('error', error => {
+    console.error('SESSION ERROR', session.__id, error);
+  });  
   session.on('close', () => {
     --session_count;
     console.log(`*** CLOSED SESSION`, session.__id, '( sessions:', session_count, ')');
@@ -56,6 +59,16 @@ proxy.on('stream', (stream, headers) => {
   } else {
     handle_connect(stream, headers)
   }
+});
+
+proxy.on('error', error => {
+  console.error('!!! proxy error', error);
+});
+
+proxy.on('unknownProtocol', socket => {
+  console.error('UNKNOWN PROTOCOL');
+  socket.on('error', error => { console.error('unknown protocol socket error', error); });
+  socket.destroy();
 });
 
 function authenticated(stream, headers) {
@@ -76,7 +89,7 @@ function authenticated(stream, headers) {
 
   console.log('  forcing blind authentication', response);
   stream.respond(response);
-  stream.end();
+  stream.end('Authentication required by the proxy; this line was sent by the proxy.');
   return false;
 }
 
@@ -114,8 +127,8 @@ function handle_non_connect(stream, headers) {
     console.log('REQUEST STREAM CLOSED', url);
     console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
   });
-  stream.on('error', err => {
-    console.log('RESPONSE STREAM ERROR', err, url, 'on session:', session.__id);
+  stream.on('error', error => {
+    console.log('RESPONSE STREAM ERROR', error, url, 'on session:', session.__id);
   });
 
   const request = http.request(options);
@@ -135,8 +148,8 @@ function handle_non_connect(stream, headers) {
         }
         stream.write(data);
       });
-      response.on('error', err => {
-        console.log('RESPONSE ERROR', err, url, 'on session:', session.__id);
+      response.on('error', error => {
+        console.log('RESPONSE ERROR', error, url, 'on session:', session.__id);
         stream.close(http2.constants.NGHTTP2_REFUSED_STREAM);
       });
       response.on('end', () => {
