@@ -66,7 +66,7 @@ proxy.on('error', error => {
 });
 
 proxy.on('unknownProtocol', socket => {
-  console.error('UNKNOWN PROTOCOL');
+  console.error('UNKNOWN PROTOCOL', 'client>proxy port', socket.remotePort);
   socket.on('error', error => { console.error('unknown protocol socket error', error); });
   socket.destroy();
 });
@@ -180,7 +180,7 @@ function handle_non_connect(stream, headers) {
 function handle_connect(stream, headers) {
   const session = stream.session;
   const auth_value = headers[':authority'];
-  console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()));
+  console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session.socket.remotePort);
 
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(stream, headers)) {
@@ -191,25 +191,12 @@ function handle_connect(stream, headers) {
 
   const open_time = performance.now();
 
-  stream.on('close', () => {
-    console.log('tunnel stream closed', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
-    console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
-    socket.end();
-  });
-  stream.on('error', error => {
-    console.log('tunnel stream error', error, auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
-  });
-  stream.on('aborted', () => {
-    console.log('tunnel stream aborted', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
-    socket.end();
-  });
-
   const auth = new URL(`tcp://${auth_value}`);
   // Strip IPv6 brackets, because Node is trying to resolve '[::]' as a name and fails to.
   const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
-  const socket = net.connect(auth.port, hostname, () => {
+  const server_socket = net.connect(auth.port, hostname, () => {
     try {
-      console.log('CONNECT\'ed to ', auth_value);
+      console.log('CONNECT\'ed to ', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session.socket.remotePort, 'proxy>server port:', server_socket.localPort);
       stream.respond({ ':status': 200 });
 
       if (config.tunnel_bytes) {
@@ -222,20 +209,20 @@ function handle_connect(stream, headers) {
           console.log(`sent ${progress.delta} -> ${auth_value}`, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
         });
 
-        socket.pipe(prog_socket).pipe(stream);
-        stream.pipe(prog_stream).pipe(socket);
+        server_socket.pipe(prog_socket).pipe(stream);
+        stream.pipe(prog_stream).pipe(server_socket);
       } else {
-        socket.pipe(stream);
-        stream.pipe(socket);
+        server_socket.pipe(stream);
+        stream.pipe(server_socket);
       }
 
     } catch (exception) {
       console.error(exception);
-      socket.end();
+      server_socket.end();
     }
   });
 
-  socket.on('error', (error) => {
+  server_socket.on('error', (error) => {
     console.log('socket error', error, auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
     const status = (error.errno == 'ENOTFOUND') ? 404 : 502;
     console.log(`responsing with http_code='${status}'`);
@@ -246,15 +233,28 @@ function handle_connect(stream, headers) {
       stream.close(http2.constants.NGHTTP2_STREAM_CLOSED);
     }
   });
-  socket.on('close', () => {
+  server_socket.on('close', () => {
     console.log('socket close', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
     stream.close();
   });
-  socket.on('end', () => {
+  server_socket.on('end', () => {
     console.log('socket end', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
   });
-  socket.on('ready', () => {
+  server_socket.on('ready', () => {
     console.log('socket ready', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
+  });
+
+  stream.on('close', () => {
+    console.log('tunnel stream closed', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
+    console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+    server_socket.end();
+  });
+  stream.on('error', error => {
+    console.log('tunnel stream error', error, auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
+  });
+  stream.on('aborted', () => {
+    console.log('tunnel stream aborted', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), 'on session:', session.__id);
+    server_socket.end();
   });
 }
 
