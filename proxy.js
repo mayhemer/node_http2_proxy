@@ -13,6 +13,8 @@ let config = Object.assign({
   timestamp: false,
   tunnel_bytes: false,
   response_bytes: false,
+  maxConcurrentStreams: 250,
+  enableConnectProtocol: true,
 }, JSON.parse(fs.readFileSync('proxy-config.json')));
 
 if (config.timestamp) {
@@ -46,6 +48,7 @@ const h2_options = {
   cert: fs.readFileSync('http2-cert.pem'),
   settings: {
     maxConcurrentStreams: config.maxConcurrentStreams,
+    enableConnectProtocol: config.enableConnectProtocol,
   },
 };
 
@@ -89,7 +92,13 @@ proxy.on('error', error => {
 });
 
 proxy.on('unknownProtocol', client_socket => {
-  console.log('unknownProtocol, pipe through internal HTTP/1 proxy', '|', 'client>proxy port:', client_socket.remotePort);
+  if (config.enableConnectProtocol) {
+    console.error('`unknownProtocol` when "enableConnectProtocol" is turned on, resetting', '|', 'client>proxy port:', client_socket.remotePort);
+    client_socket.destroy();
+    return;
+  }
+  
+  console.log('`unknownProtocol`, pipe through internal HTTP/1 proxy', '|', 'client>proxy port:', client_socket.remotePort);
   const piping_socket = net.connect(3001, '127.0.0.1', () => {
     console.log('internal socket created', '|', 'client>proxy port:', client_socket.remotePort, 'proxy>internal port:', piping_socket.localPort);
     piping_socket.pipe(client_socket);

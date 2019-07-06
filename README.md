@@ -3,7 +3,7 @@
 This software is intended for HTTP client developers to test their code with an HTTP/2 proxy.  This is not a production quality, but in time has proven as capable and reliable.  
 * Understands `CONNECT` to create tunnels to HTTPS/1/2 end-points.  
 * Capable to connect and relay to plain HTTP end-points as well.
-* ALPN other than 'HTTP/2' (`unknownProtocol`) is supported and handled internally by double-proxying to a plain HTTP/1 proxy.
+* Extended Connect Protocol (RFC 8441) is supported, but can be turned off to handle `unknownProtocol` with double-proxying through an internal plain HTTP/1 proxy.
 * Allows 'blind' (a.k.a any-password-will-do) optional configurable authentication for testing how clients handle 407 responses.
 
 **Works best with Node v12.4.0.**
