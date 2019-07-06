@@ -19,7 +19,29 @@ if (config.timestamp) {
   require('console-stamp')(console, { pattern: 'HH:MM:ss.l' });
 }
 
-const options = {
+function authenticated(stream, headers) {
+  if (!config.authenticate) {
+    return true;
+  }
+
+  if ('proxy-authorization' in headers) {
+    return true;
+  }
+
+  const response = {
+    ':status': 407,
+  }
+  if (typeof config.authenticate == "string") {
+    response['proxy-authenticate'] = config.authenticate;
+  }
+
+  console.log('  forcing blind authentication', response);
+  stream.respond(response);
+  stream.end('Authentication required by the proxy; this line was sent by the proxy.');
+  return false;
+}
+
+const h2_options = {
   key: fs.readFileSync('http2-cert.key'),
   cert: fs.readFileSync('http2-cert.pem'),
   settings: {
@@ -27,7 +49,8 @@ const options = {
   },
 };
 
-const proxy = http2.createSecureServer(options);
+const proxy = http2.createSecureServer(h2_options);
+const unknown_protocol_proxy = http.createServer({});
 
 let session_count = 0;
 let session_id = 0;
@@ -55,9 +78,9 @@ proxy.on('session', session => {
 
 proxy.on('stream', (stream, headers) => {
   if (headers[':method'] !== 'CONNECT') {
-    handle_non_connect(stream, headers)
+    handle_h2_non_connect(stream, headers)
   } else {
-    handle_connect(stream, headers)
+    handle_h2_connect(stream, headers)
   }
 });
 
@@ -65,35 +88,23 @@ proxy.on('error', error => {
   console.error('!!! proxy error', error);
 });
 
-proxy.on('unknownProtocol', socket => {
-  console.error('UNKNOWN PROTOCOL', 'client>proxy port', socket.remotePort);
-  socket.on('error', error => { console.error('unknown protocol socket error', error); });
-  socket.destroy();
+proxy.on('unknownProtocol', client_socket => {
+  console.log('unknownProtocol, pipe through internal HTTP/1 proxy', '|', 'client>proxy port:', client_socket.remotePort);
+  const piping_socket = net.connect(3001, '127.0.0.1', () => {
+    console.log('internal socket created', '|', 'client>proxy port:', client_socket.remotePort, 'proxy>internal port:', piping_socket.localPort);
+    piping_socket.pipe(client_socket);
+    client_socket.pipe(piping_socket);
+  });
+
+  piping_socket.on('error', (error) => {
+    client_socket.destroy(error);
+  });
+  client_socket.on('error', (error) => {
+    piping_socket.destroy(error);
+  });
 });
 
-function authenticated(stream, headers) {
-  if (!config.authenticate) {
-    return true;
-  }
-
-  if ('proxy-authorization' in headers) {
-    return true;
-  }
-
-  const response = {
-    ':status': 407,
-  }
-  if (typeof config.authenticate == "string") {
-    response['proxy-authenticate'] = config.authenticate;
-  }
-
-  console.log('  forcing blind authentication', response);
-  stream.respond(response);
-  stream.end('Authentication required by the proxy; this line was sent by the proxy.');
-  return false;
-}
-
-function handle_non_connect(stream, headers) {
+function handle_h2_non_connect(stream, headers) {
   const session = stream.session;
   const uri = new URL(`${headers[':scheme']}://${headers[':authority']}${headers[':path']}`);
   const url = uri.toString();
@@ -177,7 +188,7 @@ function handle_non_connect(stream, headers) {
   });
 }
 
-function handle_connect(stream, headers) {
+function handle_h2_connect(stream, headers) {
   const session = stream.session;
   const auth_value = headers[':authority'];
   console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session.socket.remotePort);
@@ -258,14 +269,142 @@ function handle_connect(stream, headers) {
   });
 }
 
-const listen = (server, port) => {
+unknown_protocol_proxy.on('connect', (request, client_socket, head) => {
+  handle_h1_connect(request, client_socket, head);
+});
+unknown_protocol_proxy.on('request', (request, response) => {
+  handle_h1_non_connect(request, response);
+});
+
+let h1_tunnel_count = 0;
+function handle_h1_connect(client_request, client_socket, head) {
+  const auth_value = client_request.headers.host;
+
+  ++h1_tunnel_count;
+  console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'H1 tunnels', h1_tunnel_count, 'proxy>internal port:', client_request.socket.remotePort);
+
+  const open_time = performance.now();
+
+  const auth = new URL(`tcp://${auth_value}`);
+  // Strip IPv6 brackets, because Node is trying to resolve '[::]' as a name and fails to.
+  const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
+  const server_socket = net.connect(auth.port, hostname, () => {
+    try {
+      console.log('CONNECT\'ed (HTTP/1) to ', auth_value, '|', 'internal>server port:', server_socket.localPort);
+      client_socket.write(
+        'HTTP/1.1 200 Connected\r\n' +
+        'Proxy-agent: mayhemer-http1\r\n' +
+        '\r\n');
+      
+      server_socket.write(head);
+      
+      if (config.tunnel_bytes) {
+        const prog_socket = progress({});
+        const prog_stream = progress({});
+        prog_socket.on('progress', progress => {
+          console.log(`recv ${progress.delta} <- ${auth_value}`);
+        });
+        prog_stream.on('progress', progress => {
+          console.log(`sent ${progress.delta} -> ${auth_value}`);
+        });
+
+        server_socket.pipe(prog_socket).pipe(client_socket);
+        client_socket.pipe(prog_stream).pipe(server_socket);
+      } else {
+        server_socket.pipe(client_socket);
+        client_socket.pipe(server_socket);
+      }
+
+    } catch (exception) {
+      console.error(exception);
+      server_socket.end();
+      client_socket.end();
+    }
+  });
+
+  server_socket.on('error', error => {
+    console.log('server socket error', error, auth_value);
+    client_socket.destroy(error);
+  });
+  server_socket.on('close', () => {
+    console.log('server socket close', auth_value, `in ${((performance.now() - open_time) / 1000).toFixed(1)}secs`);
+    client_socket.end();
+  });
+
+  client_socket.on('error', error => {
+    console.log('H1 connect tunnel error', error, auth_value);
+    server_socket.destroy(error);
+  });
+  client_socket.on('close', () => {
+    --h1_tunnel_count;
+    console.log('H1 connect tunnel closed', auth_value, 'H1 tunnels', h1_tunnel_count);
+    server_socket.end();
+  });
+}
+
+function handle_h1_non_connect(client_request, client_response) {
+  const url = client_request.url
+  const socket = client_request.socket;
+  console.log('REQUEST (HTTP/1)', client_request.method, url, 'proxy>internal port:', socket.remotePort);
+
+  const server_request = http.request(client_request);
+
+  client_request.on('data', data => {
+    if (config.response_bytes) {
+      console.log('REQUEST (HTTP/1) DATA', data.length, url);
+    }
+    server_request.write(data);
+  });
+
+  server_request.on('response', server_response => {
+    const headers = _.omit(server_response.headers, ['connection', 'transfer-encoding']);
+    console.log('RESPONSE (HTTP/1) BEGIN', url);
+    client_response.writeHead(server_response.statusCode, server_response.statusMessage, headers);
+
+    try {
+      server_response.on('data', data => {
+        if (config.response_bytes) {
+          console.log('RESPONSE (HTTP/1) DATA', data.length, url);
+        }
+        client_response.write(data);
+      });
+      server_response.on('error', error => {
+        console.log('RESPONSE (HTTP/1) ERROR', error, url);
+        client_response.end();
+      });
+      server_response.on('end', () => {
+        console.log('RESPONSE (HTTP/1) END', url);
+        client_response.end();
+        server_response.destroy();
+      });
+    } catch (exception) {
+      console.log('RESPONSE (HTTP/1) EXCEPTION', url);
+      client_response.end();
+    }
+  });
+
+  server_request.on('error', error => {
+    console.error('REQUEST (HTTP/1) ERROR', error, client_request.url);
+
+    try {
+      client_response.writeHead(502, { 'Content-Type': 'text/plain' });
+      client_response.end(error.toString());
+    } catch (exception) {
+      client_response.end();
+    }
+  });
+}
+
+const listen = (server, listening_address, port) => {
   return new Promise(resolve => {
-    server.listen(port, "0.0.0.0", 200, () => {
+    server.listen(port, listening_address, 200, () => {
       resolve(server.address().port);
     });
   });
 }
 
-listen(proxy, 3000).then(port => {
-  console.log(`proxy on :${port}`);
+listen(unknown_protocol_proxy, "127.0.0.1", 3001).then(() => {
+  listen(proxy, "0.0.0.0", 3000).then(h2_port => {
+    console.log(`h2 proxy on :${h2_port}`);
+  });
 });
