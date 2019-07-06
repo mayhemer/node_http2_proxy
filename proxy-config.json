@@ -4,5 +4,5 @@
   "tunnel_bytes": false,
   "response_bytes": false,
   "maxConcurrentStreams": 250,
-  "enableConnectProtocol": true
+  "enableConnectProtocol": false
 }
