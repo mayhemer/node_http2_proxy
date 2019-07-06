@@ -16,11 +16,11 @@ This software is intended for HTTP client developers to test their code with an 
 After this setup the proxy runs (hard coded) on `0.0.0.0:3000`.
 
 ## Client side setup ##
-* In the borwser (Firefox) or system (for e.g. Chrome) install `http2-ca.pem` as a trusted certification authority for server identification
+* In the borwser (Firefox) or the system (for e.g. Chrome) install `http2-ca.pem` as a trusted certification authority for server identification
 * Setup the browser or the system to use Proxy Auto Configuration (PAC) script URL using either of:
   * a `data:` url:
     ```javascript
-    data:text/javascript,function FindProxyForURL() { return "HTTPS     localhost:3000"; }
+    data:text/javascript,function FindProxyForURL() { return "HTTPS localhost:3000"; }
     ```
   * or a PAC file with this content (served on a server or via a `file:` url):
     ```javascript
