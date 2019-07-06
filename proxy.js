@@ -130,6 +130,13 @@ function handle_h2_non_connect(stream, headers) {
 
   console.log('REQUEST', url, options);
 
+  if (uri.protocol === 'https:') {
+    console.error('unsupported');
+    stream.respond({ ':status': 500 });
+    stream.end('I accept only CONNECT');
+    return;
+  }
+
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(stream, headers)) {
     return;
