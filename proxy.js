@@ -127,6 +127,7 @@ function handle_h2_non_connect(stream, headers) {
       'cache-control',
       'content-length',
       'content-type',
+      'cookie',
       'upgrade-insecure-requests',
     ]),
   };
