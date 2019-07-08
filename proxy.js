@@ -105,6 +105,9 @@ proxy.on('unknownProtocol', client_socket => {
   client_socket.on('error', (error) => {
     piping_socket.destroy(error);
   });
+  client_socket.on('close', () => {
+    console.log('`unknownProtocol` client socket closed', '|', 'client>proxy port:', client_socket.remotePort);
+  });
 });
 
 function handle_h2_non_connect(stream, headers) {
@@ -142,11 +145,11 @@ function handle_h2_non_connect(stream, headers) {
     return;
   }
 
-  console.log('tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+  console.log('  tunnels:', ++session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
 
   stream.on('close', () => {
     console.log('REQUEST STREAM CLOSED', url);
-    console.log('tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
+    console.log('  tunnels:', --session.__tunnel_count, 'on session:', session.__id, '( sessions:', session_count, ')');
   });
   stream.on('error', error => {
     console.log('RESPONSE STREAM ERROR', error, url, 'on session:', session.__id);
@@ -200,8 +203,9 @@ function handle_h2_non_connect(stream, headers) {
 
 function handle_h2_connect(stream, headers) {
   const session = stream.session;
+  const session_socket = session.socket;
   const auth_value = headers[':authority'];
-  console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session.socket.remotePort);
+  console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session_socket.remotePort);
 
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(stream, headers)) {
@@ -217,7 +221,7 @@ function handle_h2_connect(stream, headers) {
   const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
   const server_socket = net.connect(auth.port, hostname, () => {
     try {
-      console.log('CONNECT\'ed to ', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session.socket.remotePort, 'proxy>server port:', server_socket.localPort);
+      console.log('CONNECT\'ed to ', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session_socket.remotePort, 'proxy>server port:', server_socket.localPort);
       stream.respond({ ':status': 200 });
 
       if (config.tunnel_bytes) {
@@ -290,8 +294,8 @@ let h1_tunnel_count = 0;
 function handle_h1_connect(client_request, client_socket, head) {
   const auth_value = client_request.headers.host;
 
-  ++h1_tunnel_count;
-  console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'H1 tunnels', h1_tunnel_count, 'proxy>internal port:', client_request.socket.remotePort);
+  console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'proxy>internal port:', client_request.socket.remotePort);
+  console.log('  tunnels (HTTP/1):', ++h1_tunnel_count);
 
   const open_time = performance.now();
 
@@ -342,12 +346,12 @@ function handle_h1_connect(client_request, client_socket, head) {
   });
 
   client_socket.on('error', error => {
-    console.log('H1 connect tunnel error', error, auth_value);
+    console.log('HTTP/1 connect tunnel error', error, auth_value);
     server_socket.destroy(error);
   });
   client_socket.on('close', () => {
-    --h1_tunnel_count;
-    console.log('H1 connect tunnel closed', auth_value, 'H1 tunnels', h1_tunnel_count);
+    console.log('HTTP/1 connect tunnel closed', auth_value);
+    console.log('  tunnels (HTTP/1):', --h1_tunnel_count);
     server_socket.end();
   });
 }
