@@ -11,7 +11,7 @@ This software is intended for HTTP client developers to test their code with an 
 ## Installation ##
 * clone the repository, `cd` into it
 * run `npm install`
-* run `node proxy.js`
+* run `npm start`
 
 After this setup the proxy runs (hard coded) on `0.0.0.0:3000`.
 
