@@ -88,6 +88,8 @@ const h1proxy = config.http1_secured
 
 let session_count = 0;
 let session_id = 0;
+let h1_tunnel_count = 0;
+
 h2proxy.on('session', session => {
   session.__id = ++session_id;
   session.__tunnel_count = 0;
@@ -96,14 +98,14 @@ h2proxy.on('session', session => {
   if (session_count === 1) {
     console.log(`\n\n>>> FIRST SESSION OPENING\n`);
   }
-  console.log(`*** NEW SESSION`, session.__id, '( sessions:', session_count, ')');
+  console.log(`*** NEW SESSION`, session.__id, '( sessions:', session_count, 'h1-tunnels:', h1_tunnel_count, ')');
 
   session.on('error', error => {
     console.error('SESSION ERROR', session.__id, error);
   });  
   session.on('close', () => {
     --session_count;
-    console.log(`*** CLOSED SESSION`, session.__id, '( sessions:', session_count, ')');
+    console.log(`*** CLOSED SESSION`, session.__id, '( sessions:', session_count, 'h1-tunnels:', h1_tunnel_count, ')');
     if (!session_count) {
       console.log(`\n\n<<< LAST SESSION CLOSED\n`);
     }
@@ -330,12 +332,11 @@ h1proxy.on('request', (request, response) => {
   handle_h1_non_connect(request, response);
 });
 
-let h1_tunnel_count = 0;
 function handle_h1_connect(client_request, client_socket, head) {
   const auth_value = client_request.headers.host;
 
   console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'proxy>h1 port:', client_request.socket.remotePort);
-  console.log('  tunnels (HTTP/1):', ++h1_tunnel_count);
+  console.log('  *** NEW HTTP/1 TUNNEL', '( h1-tunnels:', ++h1_tunnel_count, 'sessions:', session_count, ')');
 
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(client_request.headers)) {
@@ -397,7 +398,7 @@ function handle_h1_connect(client_request, client_socket, head) {
   });
   client_socket.on('close', () => {
     console.log('HTTP/1 connect tunnel closed', auth_value);
-    console.log('  tunnels (HTTP/1):', --h1_tunnel_count);
+    console.log('  *** CLOSED HTTP/1 TUNNEL', '( h1-tunnels:', --h1_tunnel_count, 'sessions:', session_count, ')');
     server_socket.end();
   });
 }
@@ -431,6 +432,9 @@ function handle_h1_non_connect(client_request, client_response) {
 
   server_request.on('response', server_response => {
     const headers = _.omit(server_response.headers, ['connection', 'transfer-encoding']);
+    // The connection can't be reused (we can't handle more than one request)
+    headers['connection'] = 'close';
+
     console.log('RESPONSE (HTTP/1) BEGIN', url);
     client_response.writeHead(server_response.statusCode, server_response.statusMessage, headers);
 
@@ -448,6 +452,8 @@ function handle_h1_non_connect(client_request, client_response) {
       server_response.on('end', () => {
         console.log('RESPONSE (HTTP/1) END', url);
         client_response.end();
+        // Explicitely close the socket, out HTTP/1 request connections can't be resused
+        client_response.socket.destroy();
         server_response.destroy();
       });
     } catch (exception) {
@@ -459,7 +465,7 @@ function handle_h1_non_connect(client_request, client_response) {
     console.error('REQUEST (HTTP/1) ERROR', error, client_request.url);
 
     try {
-      client_response.writeHead(502, { 'Content-Type': 'text/plain' });
+      client_response.writeHead(502, { 'content-type': 'text/plain', 'connection': 'close', });
       client_response.end(error.toString());
     } catch (exception) {
       client_response.end();
