@@ -19,7 +19,7 @@ Note that there is also a plain HTTP/1 proxy on `127.0.0.1:3001`, which is used 
 If you need to test against secured (TLS'ed) HTTPS/1 proxy, flip `"http1_secured"` config option to `true`.  Then instead of an HTTP/2 proxy you will have HTTPS/1 proxy on the same port `3000`.  It's using the same certificate as the h2 proxy.  Client setup (as below) remains the same.
 
 ## Client side setup ##
-* In the borwser (Firefox) or the system (for e.g. Chrome) install `http2-ca.pem` as a trusted certification authority for server identification
+* In the browser (Firefox) or the system (for e.g. Chrome) install `http2-ca.pem` as a trusted certification authority for server identification
 * Setup the browser or the system to use Proxy Auto Configuration (PAC) script URL using either of:
   * a `data:` url:
     ```javascript
