@@ -419,13 +419,13 @@ function handle_h1_non_connect(client_request, client_response) {
   const server_request = http.request(url, forward_request);
   
   client_request.on('data', data => {
-    if (config.response_bytes) {
+    if (config.response_bytes || client_request.method == 'POST') {
       console.log('REQUEST (HTTP/1) DATA', data.length, url);
     }
     server_request.write(data);
   });
   client_request.on('end', () => {
-    console.log('REQUEST (HTTP/1) CLOSED', url);
+    console.log('REQUEST (HTTP/1) END', url);
     server_request.end();
   });
 
