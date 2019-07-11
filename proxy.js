@@ -22,7 +22,8 @@ if (config.timestamp) {
   require('console-stamp')(console, { pattern: 'HH:MM:ss.l' });
 }
 
-function authenticated(stream, headers) {
+
+function authenticated(headers) {
   if (!config.authenticate) {
     return true;
   }
@@ -31,6 +32,11 @@ function authenticated(stream, headers) {
     return true;
   }
 
+  console.log('  forcing blind authentication');
+  return false;
+}
+
+function respond_407_stream(stream) {
   const response = {
     ':status': 407,
   }
@@ -38,11 +44,30 @@ function authenticated(stream, headers) {
     response['proxy-authenticate'] = config.authenticate;
   }
 
-  console.log('  forcing blind authentication', response);
   stream.respond(response);
   stream.end('Authentication required by the proxy; this line was sent by the proxy.');
-  return false;
 }
+
+function respond_407_response(response) {
+  const headers = {};
+  if (typeof config.authenticate == "string") {
+    headers['proxy-authenticate'] = config.authenticate;
+  }
+
+  response.writeHead(407, "Proxy unauthenticated", headers);
+  response.end();
+}
+
+function respond_407_socket(socket) {
+  socket.write(
+    'HTTP/1.1 407 Proxy unauthenticated\r\n' +
+    (typeof config.authenticate == "string"
+      ? `proxy-authenticate: ${config.authenticate}\r\n`
+      : '') +
+    '\r\n');  
+  socket.end();
+}
+
 
 const secure_server_options = {
   key: fs.readFileSync('http2-cert.key'),
@@ -154,7 +179,8 @@ function handle_h2_non_connect(stream, headers) {
   }
 
   // Just for testing how the client behaves when authentication is required
-  if (!authenticated(stream, headers)) {
+  if (!authenticated(headers)) {
+    respond_407_stream(stream);
     return;
   }
 
@@ -221,7 +247,8 @@ function handle_h2_connect(stream, headers) {
   console.log('CONNECT\'ing to', auth_value, 'stream.id', converter.decToHex(stream.id.toString()), '|', 'client>proxy port:', session_socket.remotePort);
 
   // Just for testing how the client behaves when authentication is required
-  if (!authenticated(stream, headers)) {
+  if (!authenticated(headers)) {
+    respond_407_stream(stream);
     return;
   }
 
@@ -310,6 +337,12 @@ function handle_h1_connect(client_request, client_socket, head) {
   console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'proxy>h1 port:', client_request.socket.remotePort);
   console.log('  tunnels (HTTP/1):', ++h1_tunnel_count);
 
+  // Just for testing how the client behaves when authentication is required
+  if (!authenticated(client_request.headers)) {
+    respond_407_socket(client_socket);
+    return;
+  }
+
   const open_time = performance.now();
 
   const auth = new URL(`tcp://${auth_value}`);
@@ -374,13 +407,26 @@ function handle_h1_non_connect(client_request, client_response) {
   const socket = client_request.socket;
   console.log('REQUEST (HTTP/1)', client_request.method, url, 'proxy>h1 port:', socket.remotePort);
 
-  const server_request = http.request(client_request);
+  if (!authenticated(client_request.headers)) {
+    respond_407_response(client_response);
+    return;
+  }
 
+  const forward_request = {
+    'method': client_request.method,
+    'headers': _.omit(client_request.headers, ['proxy-authorization',]),
+  };
+  const server_request = http.request(url, forward_request);
+  
   client_request.on('data', data => {
     if (config.response_bytes) {
       console.log('REQUEST (HTTP/1) DATA', data.length, url);
     }
     server_request.write(data);
+  });
+  client_request.on('end', () => {
+    console.log('REQUEST (HTTP/1) CLOSED', url);
+    server_request.end();
   });
 
   server_request.on('response', server_response => {
@@ -409,7 +455,6 @@ function handle_h1_non_connect(client_request, client_response) {
       client_response.end();
     }
   });
-
   server_request.on('error', error => {
     console.error('REQUEST (HTTP/1) ERROR', error, client_request.url);
 
