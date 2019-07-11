@@ -3,6 +3,7 @@
   "timestamp": true,
   "tunnel_bytes": false,
   "response_bytes": false,
+  "http1_secured": false,
   "maxConcurrentStreams": 250,
   "enableConnectProtocol": false
 }

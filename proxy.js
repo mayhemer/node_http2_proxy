@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const http2 = require('http2');
 const fs = require('fs');
 const { URL } = require('url');
@@ -43,21 +44,26 @@ function authenticated(stream, headers) {
   return false;
 }
 
-const h2_options = {
+const secure_server_options = {
   key: fs.readFileSync('http2-cert.key'),
   cert: fs.readFileSync('http2-cert.pem'),
+};
+
+const h2_options = Object.assign({
   settings: {
     maxConcurrentStreams: config.maxConcurrentStreams,
     enableConnectProtocol: config.enableConnectProtocol,
   },
-};
+}, secure_server_options);
 
-const proxy = http2.createSecureServer(h2_options);
-const unknown_protocol_proxy = http.createServer({});
+const h2proxy = http2.createSecureServer(h2_options);
+const h1proxy = config.http1_secured
+  ? https.createServer(secure_server_options)
+  : http.createServer({});
 
 let session_count = 0;
 let session_id = 0;
-proxy.on('session', session => {
+h2proxy.on('session', session => {
   session.__id = ++session_id;
   session.__tunnel_count = 0;
   
@@ -79,7 +85,7 @@ proxy.on('session', session => {
   });
 });
 
-proxy.on('stream', (stream, headers) => {
+h2proxy.on('stream', (stream, headers) => {
   if (headers[':method'] !== 'CONNECT') {
     handle_h2_non_connect(stream, headers)
   } else {
@@ -87,14 +93,20 @@ proxy.on('stream', (stream, headers) => {
   }
 });
 
-proxy.on('error', error => {
+h2proxy.on('error', error => {
   console.error('!!! proxy error', error);
 });
 
-proxy.on('unknownProtocol', client_socket => {
-  console.log('`unknownProtocol`, pipe through internal HTTP/1 proxy', '|', 'client>proxy port:', client_socket.remotePort);
+h2proxy.on('unknownProtocol', client_socket => {
+  if (config.http1_secured) {
+    console.error('`unknownProtocol`, plain HTTP/1 proxy not available to pipe through, closing', '|', 'client>proxy port:', client_socket.remotePort);
+    client_socket.destroy();
+    return;
+  }
+
+  console.log('`unknownProtocol`, pipe through HTTP/1 proxy', '|', 'client>proxy port:', client_socket.remotePort);
   const piping_socket = net.connect(3001, '127.0.0.1', () => {
-    console.log('internal socket created', '|', 'client>proxy port:', client_socket.remotePort, 'proxy>internal port:', piping_socket.localPort);
+    console.log('h2->h1 pipe socket created', '|', 'client>proxy port:', client_socket.remotePort, 'proxy>h1 port:', piping_socket.localPort);
     piping_socket.pipe(client_socket);
     client_socket.pipe(piping_socket);
   });
@@ -284,10 +296,10 @@ function handle_h2_connect(stream, headers) {
   });
 }
 
-unknown_protocol_proxy.on('connect', (request, client_socket, head) => {
+h1proxy.on('connect', (request, client_socket, head) => {
   handle_h1_connect(request, client_socket, head);
 });
-unknown_protocol_proxy.on('request', (request, response) => {
+h1proxy.on('request', (request, response) => {
   handle_h1_non_connect(request, response);
 });
 
@@ -295,7 +307,7 @@ let h1_tunnel_count = 0;
 function handle_h1_connect(client_request, client_socket, head) {
   const auth_value = client_request.headers.host;
 
-  console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'proxy>internal port:', client_request.socket.remotePort);
+  console.log('CONNECT\'ing (HTTP/1) to', auth_value, 'proxy>h1 port:', client_request.socket.remotePort);
   console.log('  tunnels (HTTP/1):', ++h1_tunnel_count);
 
   const open_time = performance.now();
@@ -305,7 +317,7 @@ function handle_h1_connect(client_request, client_socket, head) {
   const hostname = auth.hostname.replace(/(^\[|\]$)/g, '');
   const server_socket = net.connect(auth.port, hostname, () => {
     try {
-      console.log('CONNECT\'ed (HTTP/1) to ', auth_value, '|', 'internal>server port:', server_socket.localPort);
+      console.log('CONNECT\'ed (HTTP/1) to ', auth_value, '|', 'h1>server port:', server_socket.localPort);
       client_socket.write(
         'HTTP/1.1 200 Connected\r\n' +
         'Proxy-agent: mayhemer-http1\r\n' +
@@ -360,7 +372,7 @@ function handle_h1_connect(client_request, client_socket, head) {
 function handle_h1_non_connect(client_request, client_response) {
   const url = client_request.url
   const socket = client_request.socket;
-  console.log('REQUEST (HTTP/1)', client_request.method, url, 'proxy>internal port:', socket.remotePort);
+  console.log('REQUEST (HTTP/1)', client_request.method, url, 'proxy>h1 port:', socket.remotePort);
 
   const server_request = http.request(client_request);
 
@@ -418,8 +430,14 @@ const listen = (server, listening_address, port) => {
   });
 }
 
-listen(unknown_protocol_proxy, "127.0.0.1", 3001).then(() => {
-  listen(proxy, "0.0.0.0", 3000).then(h2_port => {
-    console.log(`h2 proxy on :${h2_port}`);
+if (config.http1_secured) {
+  listen(h1proxy, "0.0.0.0", 3000).then(h1_port => {
+    console.log(`HTTPS/1 proxy on :${h1_port}`);
   });
-});
+} else {
+  listen(h1proxy, "127.0.0.1", 3001).then(() => {
+    listen(h2proxy, "0.0.0.0", 3000).then(h2_port => {
+      console.log(`HTTP/2 proxy on :${h2_port}`);
+    });
+  });
+}
