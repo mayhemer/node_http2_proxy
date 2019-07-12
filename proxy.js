@@ -200,7 +200,11 @@ function handle_h2_non_connect(stream, headers) {
   stream.pipe(request);
 
   request.on('response', response => {
-    const headers = _.omit(response.headers, ['connection', 'transfer-encoding']);
+    const headers = _.omit(response.headers, [
+      'connection',
+      'transfer-encoding',
+      'keep-alive',
+    ]);
     headers[':status'] = response.statusCode;
     console.log('RESPONSE BEGIN', url, headers, 'on session:', session.__id);
 
@@ -431,7 +435,11 @@ function handle_h1_non_connect(client_request, client_response) {
   });
 
   server_request.on('response', server_response => {
-    const headers = _.omit(server_response.headers, ['connection', 'transfer-encoding']);
+    const headers = _.omit(server_response.headers, [
+      'connection',
+      'transfer-encoding',
+      'keep-alive',
+    ]);
     // The connection can't be reused (we can't handle more than one request)
     headers['connection'] = 'close';
 
