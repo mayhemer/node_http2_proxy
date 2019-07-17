@@ -14,6 +14,8 @@ let config = Object.assign({
   timestamp: false,
   tunnel_bytes: false,
   response_bytes: false,
+  control_interface: true,
+  forced_failure_response_code: 0,
   maxConcurrentStreams: 250,
   enableConnectProtocol: true,
 }, JSON.parse(fs.readFileSync('proxy-config.json')));
@@ -173,6 +175,32 @@ function handle_h2_non_connect(stream, headers) {
 
   console.log('REQUEST', url, options);
 
+  if (uri.hostname === 'the.proxy' && config.control_interface) {
+    console.log(`  processing control interface request ${uri.pathname}`);
+
+    if (uri.pathname == '/fail') {
+      config.forced_failure_response_code = parseInt(uri.search.slice(1));
+      stream.respond({ ':status': 200 });
+      if (config.forced_failure_response_code) {
+        stream.end(`Proxy will now fail all requests with error code ${config.forced_failure_response_code}`);
+      } else {
+        stream.end(`Proxy will now work normally regarding response codes`);
+      }
+      return;
+    }
+
+    stream.respond({ ':status': 500 });
+    stream.end(`The proxy doesn't know this control URL path: '${uri.pathname}'`);
+    return;
+  }
+
+  if (config.forced_failure_response_code) {
+    console.log('  responding with a forced failure code', config.forced_failure_response_code);
+    stream.respond({ ':status': config.forced_failure_response_code });
+    stream.end();
+    return;
+  }
+
   if (uri.protocol === 'https:') {
     console.error('unsupported');
     stream.respond({ ':status': 500 });
@@ -255,6 +283,13 @@ function handle_h2_connect(stream, headers) {
   // Just for testing how the client behaves when authentication is required
   if (!authenticated(headers)) {
     respond_407_stream(stream);
+    return;
+  }
+
+  if (config.forced_failure_response_code) {
+    console.log('  responding with a forced failure code', config.forced_failure_response_code);
+    stream.respond({ ':status': config.forced_failure_response_code });
+    stream.end();
     return;
   }
 
@@ -348,6 +383,15 @@ function handle_h1_connect(client_request, client_socket, head) {
     return;
   }
 
+  if (config.forced_failure_response_code) {
+    console.log('  responding with a forced failure code', config.forced_failure_response_code);
+    client_socket.write(
+      `HTTP/1.1 ${config.forced_failure_response_code}\r\n` +
+      '\r\n');
+    client_socket.end();
+    return;
+  }
+
   const open_time = performance.now();
 
   const auth = new URL(`tcp://${auth_value}`);
@@ -417,6 +461,13 @@ function handle_h1_non_connect(client_request, client_response) {
     return;
   }
 
+  if (config.forced_failure_response_code) {
+    console.log('  responding with a forced failure code', config.forced_failure_response_code);
+    client_response.writeHead(config.forced_failure_response_code, "Error");
+    client_response.end();
+    return;
+  }
+  
   const forward_request = {
     'method': client_request.method,
     'headers': _.omit(client_request.headers, ['proxy-authorization',]),

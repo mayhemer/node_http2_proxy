@@ -4,6 +4,8 @@
   "tunnel_bytes": false,
   "response_bytes": false,
   "http1_secured": false,
+  "control_interface": true,
+  "forced_failure_response_code": 0,
   "maxConcurrentStreams": 250,
   "enableConnectProtocol": false
 }

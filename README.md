@@ -5,6 +5,8 @@ This software is intended for HTTP client developers to test their code with an 
 * Capable to connect and relay to plain HTTP end-points as well.
 * Extended Connect Protocol (RFC 8441) is supported, but can be turned off to handle `unknownProtocol` with double-proxying through an internal plain HTTP/1 proxy.
 * Allows 'blind' (a.k.a any-password-will-do) optional configurable authentication for testing how clients handle 407 responses.
+* Can be controlled at runtime through `http://the.proxy/` interface, supporting:
+  * `http://the.proxy/fail?CODE` to make all requests fail with the HTTP response `CODE` number.  Passing `CODE` = 0 reverts to normal behavior.
 
 **Works best with Node v12.4.0.**
 
