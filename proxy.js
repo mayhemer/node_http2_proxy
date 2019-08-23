@@ -178,6 +178,12 @@ function handle_h2_non_connect(stream, headers) {
   if (uri.hostname === 'the.proxy' && config.control_interface) {
     console.log(`  processing control interface request ${uri.pathname}`);
 
+    if (uri.pathname == '/') {
+      stream.respond({ ':status': 200 });
+      stream.end("Hello, I'm the proxy and I work!");
+      return;
+    }
+
     if (uri.pathname == '/fail') {
       config.forced_failure_response_code = parseInt(uri.search.slice(1));
       stream.respond({ ':status': 200 });
