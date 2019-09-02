@@ -342,7 +342,7 @@ function handle_h2_connect(stream, headers) {
       stream.respond({ ':status': status });
       stream.end();
     } catch (exception) {
-      stream.close(http2.constants.NGHTTP2_STREAM_CLOSED);
+      stream.close(http2.constants.NGHTTP2_CONNECT_ERROR);
     }
   });
   server_socket.on('close', () => {
