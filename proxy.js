@@ -74,6 +74,8 @@ function respond_407_socket(socket) {
 const secure_server_options = {
   key: fs.readFileSync('http2-cert.key'),
   cert: fs.readFileSync('http2-cert.pem'),
+  minVersion: config.tlsMinVersion,
+  maxVersion: config.tlsMaxVersion,
 };
 
 const h2_options = Object.assign({

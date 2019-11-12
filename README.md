@@ -8,7 +8,8 @@ This software is intended for HTTP client developers to test their code with an 
 * Can be controlled at runtime through `http://the.proxy/` interface, supporting:
   * `http://the.proxy/fail?CODE` to make all requests fail with the HTTP response `CODE` number.  Passing `CODE` = 0 reverts to normal behavior.
 
-**Works best with Node v12.4.0.**
+**Tested most successfully with Node 12.4.0+**
+**Minimum Node version to run this on is 10**
 
 ## Installation ##
 * clone the repository, `cd` into it

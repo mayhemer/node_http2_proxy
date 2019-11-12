@@ -7,5 +7,7 @@
   "control_interface": true,
   "forced_failure_response_code": 0,
   "maxConcurrentStreams": 250,
-  "enableConnectProtocol": false
+  "enableConnectProtocol": false,
+  "tlsMinVersion": "TLSv1.3",
+  "tlsMaxVersion": "TLSv1.2"
 }
