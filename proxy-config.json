@@ -8,6 +8,6 @@
   "forced_failure_response_code": 0,
   "maxConcurrentStreams": 250,
   "enableConnectProtocol": false,
-  "tlsMinVersion": "TLSv1.3",
-  "tlsMaxVersion": "TLSv1.2"
+  "tlsMinVersion": "TLSv1.2",
+  "tlsMaxVersion": "TLSv1.3"
 }
